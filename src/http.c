@@ -410,12 +410,16 @@ end:
 
 static int get_auth_cookie(struct tunnel *tunnel, char *buf, uint32_t buffer_size)
 {
-	int ret = 0;
 	const char *line;
 
-	ret = ERR_HTTP_NO_COOKIE;
-
 	line = find_header(buf, "Set-Cookie: ", buffer_size);
+	return auth_set_cookie(tunnel, line);
+}
+
+int auth_set_cookie(struct tunnel *tunnel, const char *line)
+{
+	int ret = ERR_HTTP_NO_COOKIE;
+
 	if (line) {
 		if (strncmp(line, "SVPNCOOKIE=", 11) == 0) {
 			if (line[11] == ';' || line[11] == '\0') {

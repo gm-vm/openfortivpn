@@ -340,3 +340,22 @@ void read_password(const char *pinentry, const char *hint,
 
 	printf("\n");
 }
+
+void read_input(const char *prompt, char *output, size_t len)
+{
+	int i;
+
+	printf("%s", prompt);
+	fflush(stdout);
+
+	for (i = 0; i < len; i++) {
+		int c = getchar();
+
+		if (c == '\n' || c == EOF)
+			break;
+		output[i] = (char) c;
+	}
+	output[i] = '\0';
+
+	printf("\n");
+}

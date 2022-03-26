@@ -79,6 +79,7 @@
 "                    [--pinentry=<program>] [--realm=<realm>]\n" \
 "                    [--ifname=<ifname>] [--set-routes=<0|1>]\n" \
 "                    [--half-internet-routes=<0|1>] [--set-dns=<0|1>]\n" \
+"                    [--svpn-cookie=<svpn_cookie>]\n" \
 PPPD_USAGE \
 "                    " RESOLVCONF_USAGE "[--ca-file=<file>]\n" \
 "                    [--user-cert=<file>] [--user-key=<file>]\n" \
@@ -112,6 +113,8 @@ PPPD_USAGE \
 "                                " SYSCONFDIR "/openfortivpn/config).\n" \
 "  -u <user>, --username=<user>  VPN account username.\n" \
 "  -p <pass>, --password=<pass>  VPN account password.\n" \
+"  --svpn-cookie                 A valid SVPNCOOKIE to enstablish the connection.\n" \
+"                                Pass - to have the cookie read from stdin.\n" \
 "  -o <otp>, --otp=<otp>         One-Time-Password.\n" \
 "  --otp-prompt=<prompt>         Search for the OTP prompt starting with this string.\n" \
 "  --otp-delay=<delay>           Wait <delay> seconds before sending the OTP.\n" \
@@ -189,6 +192,7 @@ int main(int argc, char **argv)
 	const char *config_file = SYSCONFDIR "/openfortivpn/config";
 	const char *host;
 	char *port_str;
+	int read_svpn_cookie_from_stdin = 0;
 
 	struct vpn_config cfg = {
 		.gateway_host = {'\0'},
@@ -196,6 +200,7 @@ int main(int argc, char **argv)
 		.username = {'\0'},
 		.password = {'\0'},
 		.password_set = 0,
+		.svpn_cookie = NULL,
 		.otp = {'\0'},
 		.otp_prompt = NULL,
 		.otp_delay = 0,
@@ -252,6 +257,7 @@ int main(int argc, char **argv)
 		{"otp",                  required_argument, NULL, 'o'},
 		{"otp-prompt",           required_argument, NULL, 0},
 		{"otp-delay",            required_argument, NULL, 0},
+		{"svpn-cookie",          required_argument, NULL, 0},
 		{"no-ftm-push",          no_argument, &cli_cfg.no_ftm_push, 1},
 		{"ifname",               required_argument, NULL, 0},
 		{"set-routes",	         required_argument, NULL, 0},
@@ -509,6 +515,15 @@ int main(int argc, char **argv)
 				cli_cfg.set_dns = set_dns;
 				break;
 			}
+			if (strcmp(long_options[option_index].name,
+			           "svpn-cookie") == 0) {
+				if (strcmp(optarg, "-") == 0) {
+					read_svpn_cookie_from_stdin = 1;
+				} else {
+					cli_cfg.svpn_cookie = strdup(optarg);
+				}
+				break;
+			}
 			goto user_error;
 		case 'h':
 			printf("%s%s%s%s%s%s%s", usage, summary,
@@ -547,6 +562,29 @@ int main(int argc, char **argv)
 
 	if (optind < argc - 1 || optind > argc)
 		goto user_error;
+
+	if (read_svpn_cookie_from_stdin) {
+		char cookie[COOKIE_SIZE + 1];
+		int bytes_read;
+		char *new_line_character;
+
+		bytes_read = read(0, cookie, COOKIE_SIZE);
+		if (bytes_read == -1) {
+			log_error("Could not read the SVPNCOOKIE (%s)\n", strerror(errno));
+			goto exit;
+		}
+		cookie[bytes_read] = '\0';
+		new_line_character = strchr(cookie, '\n');
+		if (new_line_character != NULL) {
+			*new_line_character = '\0';
+		}
+		printf("Cookie '%s'\n", cookie);
+		cli_cfg.svpn_cookie = strdup(cookie);
+		if (cli_cfg.svpn_cookie == NULL) {
+			log_error("Could not store the SVPNCOOKIE (%s)\n", strerror(errno));
+			goto exit;
+		}
+	}
 
 	if (cli_cfg.password[0] != '\0')
 		log_warn("You should not pass the password on the command line. Type it interactively or use a configuration file instead.\n");
@@ -612,14 +650,14 @@ int main(int argc, char **argv)
 		goto user_error;
 	}
 	// Check username
-	if (cfg.username[0] == '\0')
+	if (cfg.username[0] == '\0' && cfg.svpn_cookie == NULL)
 		// Need either username or cert
 		if (cfg.user_cert == NULL) {
 			log_error("Specify a username.\n");
 			goto user_error;
 		}
 	// If username but no password given, interactively ask user
-	if (!cfg.password_set && cfg.username[0] != '\0') {
+	if (!cfg.password_set && cfg.username[0] != '\0' && cfg.svpn_cookie == NULL) {
 		char hint[USERNAME_SIZE + 1 + REALM_SIZE + 1 + GATEWAY_HOST_SIZE + 10];
 
 		sprintf(hint, "%s_%s_%s_password",

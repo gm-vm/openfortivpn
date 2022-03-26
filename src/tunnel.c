@@ -66,6 +66,7 @@
 
 #include <errno.h>
 #include <signal.h>
+#include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
@@ -1271,6 +1272,13 @@ int run_tunnel(struct vpn_config *config)
 		.on_ppp_if_down = on_ppp_if_down
 	};
 
+	if (config->svpn_cookie != NULL) {
+		if (auth_set_cookie(&tunnel, config->svpn_cookie) != 1) {
+			log_error("The given SVPNCOOKIE is not valid\n");
+			return 1;
+		}
+	}
+
 	// Step 0: get gateway host IP
 	log_debug("Resolving gateway host ip\n");
 	ret = get_gateway_host_ip(&tunnel);
@@ -1286,12 +1294,14 @@ int run_tunnel(struct vpn_config *config)
 
 	// Step 2: connect to the HTTP interface and authenticate to get a
 	// cookie
-	ret = auth_log_in(&tunnel);
-	if (ret != 1) {
-		log_error("Could not authenticate to gateway. Please check the password, client certificate, etc.\n");
-		log_debug("%s (%d)\n", err_http_str(ret), ret);
-		ret = 1;
-		goto err_tunnel;
+	if (config->svpn_cookie == NULL) {
+		ret = auth_log_in(&tunnel);
+		if (ret != 1) {
+			log_error("Could not authenticate to gateway. Please check the password, client certificate, etc.\n");
+			log_debug("%s (%d)\n", err_http_str(ret), ret);
+			ret = 1;
+			goto err_tunnel;
+		}
 	}
 	log_info("Authenticated.\n");
 	log_debug("Cookie: %s\n", tunnel.cookie);

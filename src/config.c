@@ -50,6 +50,7 @@ const struct vpn_config invalid_cfg = {
 	.otp_prompt = NULL,
 	.otp_delay = -1,
 	.no_ftm_push = -1,
+	.svpn_cookie = NULL,
 	.pinentry = NULL,
 	.realm = {'\0'},
 	.iface_name = {'\0'},
@@ -259,6 +260,9 @@ int load_config(struct vpn_config *cfg, const char *filename)
 			strncpy(cfg->password, val, PASSWORD_SIZE);
 			cfg->password[PASSWORD_SIZE] = '\0';
 			cfg->password_set = 1;
+		} else if (strcmp(key, "svpn-cookie") == 0) {
+			free(cfg->svpn_cookie);
+			cfg->svpn_cookie = strdup(val);
 		} else if (strcmp(key, "otp") == 0) {
 			strncpy(cfg->otp, val, OTP_SIZE);
 			cfg->otp[OTP_SIZE] = '\0';
@@ -475,6 +479,7 @@ void destroy_vpn_config(struct vpn_config *cfg)
 {
 	free(cfg->otp_prompt);
 	free(cfg->pinentry);
+	free(cfg->svpn_cookie);
 #if HAVE_USR_SBIN_PPPD
 	free(cfg->pppd_log);
 	free(cfg->pppd_plugin);
@@ -518,6 +523,10 @@ void merge_config(struct vpn_config *dst, struct vpn_config *src)
 		dst->otp_delay = src->otp_delay;
 	if (src->no_ftm_push != invalid_cfg.no_ftm_push)
 		dst->no_ftm_push = src->no_ftm_push;
+	if (src->svpn_cookie != invalid_cfg.svpn_cookie) {
+		free(dst->svpn_cookie);
+		dst->svpn_cookie = src->svpn_cookie;
+	}
 	if (src->pinentry) {
 		free(dst->pinentry);
 		dst->pinentry = src->pinentry;

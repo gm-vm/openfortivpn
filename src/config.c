@@ -51,6 +51,7 @@ const struct vpn_config invalid_cfg = {
 	.otp_delay = -1,
 	.no_ftm_push = -1,
 	.saml = -1,
+	.saml_handler = NULL,
 	.pinentry = NULL,
 	.realm = {'\0'},
 	.iface_name = {'\0'},
@@ -476,6 +477,7 @@ void destroy_vpn_config(struct vpn_config *cfg)
 {
 	free(cfg->otp_prompt);
 	free(cfg->pinentry);
+	free(cfg->saml_handler);
 #if HAVE_USR_SBIN_PPPD
 	free(cfg->pppd_log);
 	free(cfg->pppd_plugin);
@@ -521,6 +523,10 @@ void merge_config(struct vpn_config *dst, struct vpn_config *src)
 		dst->no_ftm_push = src->no_ftm_push;
 	if (src->saml != invalid_cfg.saml)
 		dst->saml = src->saml;
+	if (src->saml_handler != invalid_cfg.saml_handler) {
+		free(dst->saml_handler);
+		dst->saml_handler = src->saml_handler;
+	}
 	if (src->pinentry) {
 		free(dst->pinentry);
 		dst->pinentry = src->pinentry;

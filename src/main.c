@@ -113,6 +113,9 @@ PPPD_USAGE \
 "  -u <user>, --username=<user>  VPN account username.\n" \
 "  -p <pass>, --password=<pass>  VPN account password.\n" \
 "  --saml                        Use single sign-on with SAML.\n" \
+"  --saml-handler                Command executed for the single sign-on process.\n" \
+"                                The command will receive the SAML URL as first argument.\n" \
+"                                This option only works with 'sudo --preserve-env'.\n" \
 "  -o <otp>, --otp=<otp>         One-Time-Password.\n" \
 "  --otp-prompt=<prompt>         Search for the OTP prompt starting with this string.\n" \
 "  --otp-delay=<delay>           Wait <delay> seconds before sending the OTP.\n" \
@@ -198,6 +201,7 @@ int main(int argc, char **argv)
 		.password = {'\0'},
 		.password_set = 0,
 		.saml = 0,
+		.saml_handler = NULL,
 		.otp = {'\0'},
 		.otp_prompt = NULL,
 		.otp_delay = 0,
@@ -255,6 +259,7 @@ int main(int argc, char **argv)
 		{"otp-prompt",           required_argument, NULL, 0},
 		{"otp-delay",            required_argument, NULL, 0},
 		{"saml",                 no_argument, &cli_cfg.saml, 1},
+		{"saml-handler",         required_argument, NULL, 0},
 		{"no-ftm-push",          no_argument, &cli_cfg.no_ftm_push, 1},
 		{"ifname",               required_argument, NULL, 0},
 		{"set-routes",	         required_argument, NULL, 0},
@@ -510,6 +515,12 @@ int main(int argc, char **argv)
 					break;
 				}
 				cli_cfg.set_dns = set_dns;
+				break;
+			}
+			if (strcmp(long_options[option_index].name,
+			           "saml-handler") == 0) {
+				cli_cfg.saml_handler = strdup(optarg);
+				cli_cfg.saml = 1;
 				break;
 			}
 			goto user_error;

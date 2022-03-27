@@ -424,7 +424,7 @@ int auth_set_cookie(struct tunnel *tunnel, const char *line)
 		char *cookie;
 		
 		cookie = strstr(line, "SVPNCOOKIE=");
-		if (cookie != NULL && strncmp(cookie, "SVPNCOOKIE=", 11) == 0) {
+		if (cookie != NULL) {
 			if (cookie[11] == ';' || cookie[11] == '\0') {
 				log_debug("Empty cookie.\n");
 			} else {

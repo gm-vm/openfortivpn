@@ -74,9 +74,10 @@
 #endif
 
 #define usage \
-"Usage: openfortivpn [<host>[:<port>]] [-u <user>] [-p <pass>] [--saml]\n" \
+"Usage: openfortivpn [<host>[:<port>]] [-u <user>] [-p <pass>]\n" \
 "                    [--otp=<otp>] [--otp-delay=<delay>] [--otp-prompt=<prompt>]\n" \
 "                    [--pinentry=<program>] [--realm=<realm>]\n" \
+"                    [--saml] [--saml-handler<program>]\n" \
 "                    [--ifname=<ifname>] [--set-routes=<0|1>]\n" \
 "                    [--half-internet-routes=<0|1>] [--set-dns=<0|1>]\n" \
 PPPD_USAGE \

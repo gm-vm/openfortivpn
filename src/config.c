@@ -276,6 +276,18 @@ int load_config(struct vpn_config *cfg, const char *filename)
 				continue;
 			}
 			cfg->otp_delay = otp_delay;
+		} else if (strcmp(key, "saml") == 0) {
+			int saml = strtob(val);
+
+			if (saml < 0) {
+				log_warn("Bad saml in configuration file: \"%s\".\n",
+				         val);
+				continue;
+			}
+			cfg->saml = saml;
+		} else if (strcmp(key, "saml-handler") == 0) {
+			free(cfg->saml_handler);
+			cfg->saml_handler = strdup(val);
 		} else if (strcmp(key, "no-ftm-push") == 0) {
 			int no_ftm_push = strtob(val);
 

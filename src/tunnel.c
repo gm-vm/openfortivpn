@@ -66,7 +66,6 @@
 
 #include <errno.h>
 #include <signal.h>
-#include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
@@ -1256,22 +1255,35 @@ err_tcp_connect:
 	return 1;
 }
 
-static char *build_saml_url(const char *host)
+static char *build_saml_url(struct vpn_config *config)
 {
-	const char *saml_url_format_string = "https://%s/remote/saml/start";
+	const char *saml_url_format_string = "https://%s:%d/remote/saml/start";
+	const char *realm_query_param = "?realm=";
 	char *url;
+	int url_len;
 
-	url = malloc(strlen(saml_url_format_string) + strlen(host) + 1);
+	url_len = strlen(saml_url_format_string) - 4;
+	url_len += strlen(config->gateway_host);
+	url_len += 5; // gateway_port can have up to 5 digits.
+	if (config->realm)
+		url_len += strlen(realm_query_param) + strlen(config->realm);
+
+	url = malloc(url_len + 1);
 	if (url == NULL) {
 		log_error("Could not build the SAML URL (%s)\n", strerror(errno));
 		return NULL;
 	} else {
-		sprintf(url, saml_url_format_string, host);
+		snprintf(url, url_len, saml_url_format_string, config->gateway_host, config->gateway_port);
+		if (config->realm) {
+			strcat(url, realm_query_param);
+			strcat(url, config->realm);
+		}
+		url[url_len] = '\0';
 		return url;
 	}
 }
 
-static int run_saml_handler(struct vpn_config *config, int *pipefd, int uid)
+static int run_saml_handler(struct tunnel *tunnel, struct vpn_config *config)
 {
 	char cookie[COOKIE_SIZE + 1];
 	char *url = NULL;
@@ -1279,13 +1291,7 @@ static int run_saml_handler(struct vpn_config *config, int *pipefd, int uid)
 	FILE *fp;
 	int ret;
 
-	if (setuid(uid)) {
-		log_error("Could not set the UID to %d (%s)\n", uid, strerror(errno));
-		ret = 1;
-		goto cleanup;
-	}
-
-	url = build_saml_url(config->gateway_host);
+	url = build_saml_url(config);
 	if (url == NULL) {
 		ret = 1;
 		goto cleanup;
@@ -1297,11 +1303,7 @@ static int run_saml_handler(struct vpn_config *config, int *pipefd, int uid)
 		ret = 1;
 		goto cleanup;
 	}
-	if (sprintf(command, "%s %s", config->saml_handler, url)) {
-		log_error("Could not build the command (%s)\n", strerror(errno));
-		ret = 1;
-		goto cleanup;
-	}
+	sprintf(command, "%s \"%s\"", config->saml_handler, url);
 
 	fp = popen(command, "r");
 	if (fp == NULL) {
@@ -1310,15 +1312,13 @@ static int run_saml_handler(struct vpn_config *config, int *pipefd, int uid)
 		goto cleanup;
 	}
 
-	if (fgets(cookie, COOKIE_SIZE + 1, fp) != NULL)
-		write(pipefd[1], cookie, strlen(cookie));
+	fgets(cookie, COOKIE_SIZE + 1, fp);
 	if (pclose(fp))
 		log_warn("Could not close the saml-handler pipe (%s).\n", strerror(errno));
-	ret = 0;
+
+	ret = auth_set_cookie(tunnel, cookie);
 
 cleanup:
-	close(pipefd[0]);
-	close(pipefd[1]);
 	free(command);
 	free(url);
 	return ret;
@@ -1328,15 +1328,6 @@ cleanup:
  * Handle the single sign-on either launching an external application,
  * if --saml-handler is set, or requiring the user to provide the
  * SVPNCOOKIE manually in the console.
- *
- * The external application is launched with fork() to allow the use of
- * setuid() without losing the root privileges. Callers need to take
- * care of handling the forked process.
- *
- * This function returns:
- *  - 0 in case of success
- *  - 1 in case of error
- *  - 2 if the forked process ended successfully
  */
 static int handle_saml(struct tunnel *tunnel, struct vpn_config *config)
 {
@@ -1344,7 +1335,7 @@ static int handle_saml(struct tunnel *tunnel, struct vpn_config *config)
 		char cookie[COOKIE_SIZE + 1];
 		char *url;
 
-		url = build_saml_url(config->gateway_host);
+		url = build_saml_url(config);
 		if (url == NULL) {
 			return 1;
 		}
@@ -1354,56 +1345,9 @@ static int handle_saml(struct tunnel *tunnel, struct vpn_config *config)
 		printf("Press enter when done.\n");
 		read_input("", cookie, COOKIE_SIZE);
 		free(url);
-		return auth_set_cookie(tunnel, cookie) == 1 ? 0 : 1;
+		return auth_set_cookie(tunnel, cookie);
 	} else {
-		char *sudo_uid_string;
-		char *home_dir;
-		int sudo_uid;
-		pid_t child_pid;
-		int pipefd[2];
-
-		// saml-handler can be any program and should be executed without
-		// root privileges. It also likely needs most of the standard
-		// env variables to be set, or it may misbehave.
-		// The easiest way to deal this situation is that or requiring the
-		// use of 'sudo --preserve-env'. In this way we can both retrieve
-		// the original UID and have all the env variables set.
-		// Relying solely on seteuid() is not enough.
-
-		sudo_uid_string = getenv("SUDO_UID");
-		if (getenv("SUDO_UID") == NULL) {
-			log_error("--saml-handler only works with 'sudo --preserve-env'\n");
-			return 1;
-		}
-
-		sudo_uid = strtol(sudo_uid_string, NULL, 10);
-		if (sudo_uid == 0) {
-			log_error("SUDO_UID cannot be 0\n");
-			return 1;
-		}
-
-		home_dir = getenv("HOME");
-		if (home_dir == NULL || strcmp(home_dir, "/root") == 0) {
-			log_error("You must use 'sudo --preserve-env'\n");
-			return 1;
-		}
-
-		pipe(pipefd);
-		child_pid = fork();
-
-		if (child_pid == 0) {
-			return run_saml_handler(config, pipefd, sudo_uid) == 0 ? 2 : 1;
-		} else {
-			char cookie[COOKIE_SIZE + 1];
-			int status;
-
-			read(pipefd[0], &cookie, COOKIE_SIZE);
-			cookie[COOKIE_SIZE] = '\0';
-			close(pipefd[0]);
-			close(pipefd[1]);
-			waitpid(child_pid, &status, 0);
-			return auth_set_cookie(tunnel, cookie) == 1 ? 0 : 1;
-		}
+		return run_saml_handler(tunnel, config);
 	}
 }
 
@@ -1423,19 +1367,6 @@ int run_tunnel(struct vpn_config *config)
 		.on_ppp_if_down = on_ppp_if_down
 	};
 
-	// Grab the cookie immediately in case of SAML, mainly to
-	// keep the cleanup code simple.
-	if (config->saml) {
-		ret = handle_saml(&tunnel, config);
-		if (ret == 2) {
-			// This is the process that ran the SAML handler.
-			return 0;
-		} else if (ret == 1) {
-			log_error("No SVPNCOOKIE has been provided.\n");
-			return 1;
-		}
-	}
-
 	// Step 0: get gateway host IP
 	log_debug("Resolving gateway host ip\n");
 	ret = get_gateway_host_ip(&tunnel);
@@ -1451,14 +1382,16 @@ int run_tunnel(struct vpn_config *config)
 
 	// Step 2: connect to the HTTP interface and authenticate to get a
 	// cookie
-	if (!config->saml) {
+	if (config->saml) {
+		ret = handle_saml(&tunnel, config);
+	} else {
 		ret = auth_log_in(&tunnel);
-		if (ret != 1) {
-			log_error("Could not authenticate to gateway. Please check the password, client certificate, etc.\n");
-			log_debug("%s (%d)\n", err_http_str(ret), ret);
-			ret = 1;
-			goto err_tunnel;
-		}
+	}
+	if (ret != 1) {
+		log_error("Could not authenticate to gateway. Please check the password, client certificate, etc.\n");
+		log_debug("%s (%d)\n", err_http_str(ret), ret);
+		ret = 1;
+		goto err_tunnel;
 	}
 	log_info("Authenticated.\n");
 	log_debug("Cookie: %s\n", tunnel.cookie);

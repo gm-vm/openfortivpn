@@ -421,42 +421,36 @@ int auth_set_cookie(struct tunnel *tunnel, const char *line)
 	int ret = ERR_HTTP_NO_COOKIE;
 
 	if (line) {
-		char *cookie;
-		
-		cookie = strstr(line, "SVPNCOOKIE=");
-		if (cookie != NULL) {
-			if (cookie[11] == ';' || cookie[11] == '\0') {
-				log_debug("Empty cookie.\n");
-			} else {
-				char *end1;
-				char *end2;
-				char end1_save = '\0';
-				char end2_save = '\0';
+		char *cookie_start;
 
-				end1 = strstr(cookie, "\r");
-				if (end1 != NULL) {
-					end1_save = *end1;
-					end1[0] = '\0';
-				}
-				end2 = strstr(cookie, ";");
-				if (end2 != NULL) {
-					end2_save = *end2;
-					end2[0] = '\0';
-				}
-				log_debug("Cookie: %s\n", cookie);
-				strncpy(tunnel->cookie, cookie, COOKIE_SIZE);
-				tunnel->cookie[COOKIE_SIZE] = '\0';
-				if (strlen(cookie) > COOKIE_SIZE) {
-					log_error("Cookie larger than expected: %zu > %d\n",
-					          strlen(cookie), COOKIE_SIZE);
+		cookie_start = strstr(line, "SVPNCOOKIE=");
+		if (cookie_start != NULL) {
+			char *cookie_end;
+			int cookie_len;
+
+			cookie_end = strpbrk(cookie_start, "\r\n;");
+			if (cookie_end) {
+				cookie_len = cookie_end - cookie_start;
+			} else {
+				cookie_len = strlen(cookie_start);
+			}
+
+			if (cookie_len > COOKIE_SIZE) {
+				log_error("Cookie larger than expected: %zu > %d\n",
+						cookie_len, COOKIE_SIZE);
+			} else {
+				strncpy(tunnel->cookie, cookie_start, COOKIE_SIZE);
+				tunnel->cookie[cookie_len] = '\0';
+
+				if (tunnel->cookie[11] == '\0') {
+					log_debug("Empty cookie.\n");
 				} else {
+					log_debug("Cookie: %s\n", tunnel->cookie);
 					ret = 1; // success
 				}
-				if (end1 != NULL)
-					end1[0] = end1_save;
-				if (end2 != NULL)
-					end2[0] = end2_save;
 			}
+		} else {
+			log_debug("No cookie found\n");
 		}
 	}
 	return ret;

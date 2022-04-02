@@ -47,6 +47,7 @@ const struct vpn_config invalid_cfg = {
 	.password = {'\0'},
 	.password_set = 0,
 	.cookie = NULL,
+	.saml_handler = NULL,
 	.otp = {'\0'},
 	.otp_prompt = NULL,
 	.otp_delay = -1,
@@ -278,6 +279,9 @@ int load_config(struct vpn_config *cfg, const char *filename)
 		} else if (strcmp(key, "cookie") == 0) {
 			free(cfg->cookie);
 			cfg->cookie = strdup(val);
+		} else if (strcmp(key, "saml-handler") == 0) {
+			free(cfg->saml_handler);
+			cfg->saml_handler = strdup(val);
 		} else if (strcmp(key, "no-ftm-push") == 0) {
 			int no_ftm_push = strtob(val);
 
@@ -480,6 +484,7 @@ void destroy_vpn_config(struct vpn_config *cfg)
 	free(cfg->otp_prompt);
 	free(cfg->pinentry);
 	free(cfg->cookie);
+	free(cfg->saml_handler);
 #if HAVE_USR_SBIN_PPPD
 	free(cfg->pppd_log);
 	free(cfg->pppd_plugin);
@@ -526,6 +531,10 @@ void merge_config(struct vpn_config *dst, struct vpn_config *src)
 	if (src->cookie != invalid_cfg.cookie) {
 		free(dst->cookie);
 		dst->cookie = src->cookie;
+	}
+	if (src->saml_handler != invalid_cfg.saml_handler) {
+		free(dst->saml_handler);
+		dst->saml_handler = src->saml_handler;
 	}
 	if (src->pinentry) {
 		free(dst->pinentry);

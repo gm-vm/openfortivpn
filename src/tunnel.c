@@ -1255,6 +1255,78 @@ err_tcp_connect:
 	return 1;
 }
 
+static char *build_saml_url(struct vpn_config *config)
+{
+	const char *saml_url_format_string = "https://%s:%d/remote/saml/start";
+	const char *realm_query_param = "?realm=";
+	char *url;
+	int url_len;
+	int real_length;
+
+	real_length = strlen(config->realm);
+	url_len = strlen(saml_url_format_string) - 4;
+	url_len += strlen(config->gateway_host);
+	url_len += 5; // gateway_port can have up to 5 digits.
+	if (real_length)
+		url_len += strlen(realm_query_param) + real_length;
+
+	url = malloc(url_len + 1);
+	if (url == NULL) {
+		log_error("Could not build the SAML URL (%s)\n", strerror(errno));
+		return NULL;
+	} else {
+		snprintf(url, url_len, saml_url_format_string, config->gateway_host, config->gateway_port);
+		if (real_length) {
+			strcat(url, realm_query_param);
+			strcat(url, config->realm);
+		}
+		url[url_len] = '\0';
+		return url;
+	}
+}
+
+static int run_saml_handler(struct tunnel *tunnel, struct vpn_config *config)
+{
+	const char *command_format_string;
+	char cookie[COOKIE_SIZE + 1];
+	char *url = NULL;
+	char *command = NULL;
+	FILE *fp;
+	int ret;
+
+	url = build_saml_url(config);
+	if (url == NULL) {
+		ret = 1;
+		goto cleanup;
+	}
+
+	command_format_string = "%s \"%s\"";
+	command = malloc(strlen(config->saml_handler) + strlen(url) + 3 + 1);
+	if (command == NULL) {
+		log_error("Could not allocate the string for the command (%s)\n", strerror(errno));
+		ret = 1;
+		goto cleanup;
+	}
+	sprintf(command, command_format_string, config->saml_handler, url);
+	fp = popen(command, "r");
+	if (fp == NULL) {
+		log_error("Could not execute '%s' (%s)\n", command, strerror(errno));
+		ret = 1;
+		goto cleanup;
+	}
+
+	fgets(cookie, COOKIE_SIZE + 1, fp);
+	if (pclose(fp))
+		log_warn("Could not close the saml-handler pipe (%s).\n", strerror(errno));
+
+	ret = auth_set_cookie(tunnel, cookie);
+
+cleanup:
+	free(command);
+	free(url);
+	return ret;
+}
+
 int run_tunnel(struct vpn_config *config)
 {
 	int ret;
@@ -1288,6 +1360,8 @@ int run_tunnel(struct vpn_config *config)
 	// cookie
 	if (config->cookie) {
 		ret = auth_set_cookie(&tunnel, config->cookie);
+	} else if (config->saml_handler) {
+		ret = run_saml_handler(&tunnel, config);
 	} else {
 		ret = auth_log_in(&tunnel);
 	}

@@ -416,7 +416,7 @@ static int get_auth_cookie(struct tunnel *tunnel, char *buf, uint32_t buffer_siz
 	return auth_set_cookie(tunnel, line);
 }
 
-static int auth_set_cookie(struct tunnel *tunnel, const char *line)
+int auth_set_cookie(struct tunnel *tunnel, const char *line)
 {
 	int ret = ERR_HTTP_NO_COOKIE;
 

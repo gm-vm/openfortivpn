@@ -75,7 +75,7 @@
 
 #define usage \
 "Usage: openfortivpn [<host>[:<port>]] [-u <user>] [-p <pass>]\n" \
-"                    [--cookie] [--saml-handler=<program>]\n" \
+"                    [--cookie=<cookie>] [--saml-handler=<program>]\n" \
 "                    [--otp=<otp>] [--otp-delay=<delay>] [--otp-prompt=<prompt>]\n" \
 "                    [--pinentry=<program>] [--realm=<realm>]\n" \
 "                    [--ifname=<ifname>] [--set-routes=<0|1>]\n" \
@@ -113,7 +113,8 @@ PPPD_USAGE \
 "                                " SYSCONFDIR "/openfortivpn/config).\n" \
 "  -u <user>, --username=<user>  VPN account username.\n" \
 "  -p <pass>, --password=<pass>  VPN account password.\n" \
-"  --cookie=<cookie>             A valid SVPNCOOKIE.\n" \
+"  --cookie=<cookie>             A valid session cookie (SVPNCOOKIE).\n" \
+"                                If <cookie> is - the value is read from standard input.\n" \
 "  --saml-handler=<program>      Command executed for the single sign-on process.\n" \
 "                                The program will receive the SAML URL as first argument.\n" \
 "  -o <otp>, --otp=<otp>         One-Time-Password.\n" \
@@ -565,6 +566,26 @@ int main(int argc, char **argv)
 
 	if (optind < argc - 1 || optind > argc)
 		goto user_error;
+
+	if (strcmp(cli_cfg.cookie, "-") == 0) {
+		char cookie[COOKIE_SIZE + 1];
+		int bytes_read;
+
+		free(cli_cfg.cookie);
+		cli_cfg.cookie = NULL;
+
+		bytes_read = read(STDIN_FILENO, cookie, COOKIE_SIZE);
+		if (bytes_read == -1) {
+			log_error("Could not read the cookie (%s)\n", strerror(errno));
+			goto exit;
+		}
+		cookie[bytes_read] = '\0';
+		cli_cfg.cookie = strdup(cookie);
+		if (cli_cfg.cookie == NULL) {
+			log_error("Could not read the cookie (%s)\n", strerror(errno));
+			goto exit;
+		}
+	}
 
 	if (cli_cfg.password[0] != '\0')
 		log_warn("You should not pass the password on the command line. Type it interactively or use a configuration file instead.\n");

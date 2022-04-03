@@ -76,6 +76,7 @@ For a secure alternative, use pinentry or let openfortivpn prompt for the passwo
 .TP
 \fB\-\-cookie=\fI<cookie>\fR
 A valid cookie (SVPNCOOKIE) to use in place of username and password.
+The value is read from standard input when \fI<cookie>\fR is -.
 .TP
 \fB\-\-saml\-handler=\fI<program>\fR
 Authenticate with SAML single sign-on using an external \fI<program>\fR

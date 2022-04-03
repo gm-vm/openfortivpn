@@ -9,7 +9,6 @@ openfortivpn \- Client for PPP+SSL VPN tunnel services
 [\fB\-u\fR \fI<user>\fR]
 [\fB\-p\fR \fI<pass>\fR]
 [\fB\-\-cookie=\fI<cookie>\fR]
-[\fB\-\-saml\-handler=\fI<command>\fR]
 [\fB\-\-pinentry=\fI<name>\fR]
 [\fB\-\-otp=\fI<otp>\fR]
 [\fB\-\-otp\-prompt=\fI<prompt>\fR]
@@ -77,13 +76,6 @@ For a secure alternative, use pinentry or let openfortivpn prompt for the passwo
 \fB\-\-cookie=\fI<cookie>\fR
 A valid cookie (SVPNCOOKIE) to use in place of username and password.
 The value is read from standard input when \fI<cookie>\fR is -.
-.TP
-\fB\-\-saml\-handler=\fI<program>\fR
-Authenticate with SAML single sign-on using an external \fI<program>\fR
-instead of using username and password. The given \fI<program>\fR needs
-to take care of the authentication, print to stdout the session cookie
-(SVPNCOOKIE) and exit. openfortivpn will execute \fI<program>\fR with
-root privileges, passing the URL of the SAML page as first argument.
 .TP
 \fB\-\-pinentry=\fI<name>\fR
 The pinentry program to use. Allows supplying the password in a secure manner.

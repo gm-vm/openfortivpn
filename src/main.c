@@ -558,7 +558,7 @@ int main(int argc, char **argv)
 	if (optind < argc - 1 || optind > argc)
 		goto user_error;
 
-	if (strcmp(cli_cfg.cookie, "-") == 0) {
+	if (cli_cfg.cookie && strcmp(cli_cfg.cookie, "-") == 0) {
 		char cookie[COOKIE_SIZE + 1];
 		int bytes_read;
 

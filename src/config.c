@@ -276,8 +276,9 @@ int load_config(struct vpn_config *cfg, const char *filename)
 			}
 			cfg->otp_delay = otp_delay;
 		} else if (strcmp(key, "cookie") == 0) {
-			free(cfg->cookie);
-			cfg->cookie = strdup(val);
+			log_warn("Ignoring option \"%s\".\n", key);
+		} else if (strcmp(key, "cookie-on-stdin") == 0) {
+			log_warn("Ignoring option \"%s\".\n", key);
 		} else if (strcmp(key, "no-ftm-push") == 0) {
 			int no_ftm_push = strtob(val);
 

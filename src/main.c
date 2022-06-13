@@ -75,7 +75,7 @@
 
 #define usage \
 "Usage: openfortivpn [<host>[:<port>]] [-u <user>] [-p <pass>]\n" \
-"                    [--cookie=<cookie>]\n" \
+"                    [--cookie=<cookie>] [--cookie-on-stdin]\n" \
 "                    [--otp=<otp>] [--otp-delay=<delay>] [--otp-prompt=<prompt>]\n" \
 "                    [--pinentry=<program>] [--realm=<realm>]\n" \
 "                    [--ifname=<ifname>] [--set-routes=<0|1>]\n" \
@@ -114,7 +114,7 @@ PPPD_USAGE \
 "  -u <user>, --username=<user>  VPN account username.\n" \
 "  -p <pass>, --password=<pass>  VPN account password.\n" \
 "  --cookie=<cookie>             A valid session cookie (SVPNCOOKIE).\n" \
-"                                If <cookie> is - the value is read from standard input.\n" \
+"  --cookie-on-stdin             Read the cookie (SVPNCOOKIE) from standard input.\n" \
 "  -o <otp>, --otp=<otp>         One-Time-Password.\n" \
 "  --otp-prompt=<prompt>         Search for the OTP prompt starting with this string.\n" \
 "  --otp-delay=<delay>           Wait <delay> seconds before sending the OTP.\n" \
@@ -254,6 +254,7 @@ int main(int argc, char **argv)
 		{"username",             required_argument, NULL, 'u'},
 		{"password",             required_argument, NULL, 'p'},
 		{"cookie",               required_argument, NULL, 0},
+		{"cookie-on-stdin",      no_argument, NULL, 0},
 		{"otp",                  required_argument, NULL, 'o'},
 		{"otp-prompt",           required_argument, NULL, 0},
 		{"otp-delay",            required_argument, NULL, 0},
@@ -519,6 +520,18 @@ int main(int argc, char **argv)
 				cli_cfg.cookie = strdup(optarg);
 				break;
 			}
+			if (strcmp(long_options[option_index].name,
+			           "cookie-on-stdin") == 0) {
+				char *cookie = read_from_stdin(COOKIE_SIZE);
+
+				if (cookie == NULL) {
+					log_warn("Could not read the cookie from stdin");
+					break;
+				}
+				free(cli_cfg.cookie);
+				cli_cfg.cookie = cookie;
+				break;
+			}
 			goto user_error;
 		case 'h':
 			printf("%s%s%s%s%s%s%s", usage, summary,
@@ -557,26 +570,6 @@ int main(int argc, char **argv)
 
 	if (optind < argc - 1 || optind > argc)
 		goto user_error;
-
-	if (cli_cfg.cookie && strcmp(cli_cfg.cookie, "-") == 0) {
-		char cookie[COOKIE_SIZE + 1];
-		int bytes_read;
-
-		free(cli_cfg.cookie);
-		cli_cfg.cookie = NULL;
-
-		bytes_read = read(STDIN_FILENO, cookie, COOKIE_SIZE);
-		if (bytes_read == -1) {
-			log_error("Could not read the cookie (%s)\n", strerror(errno));
-			goto exit;
-		}
-		cookie[bytes_read] = '\0';
-		cli_cfg.cookie = strdup(cookie);
-		if (cli_cfg.cookie == NULL) {
-			log_error("Could not read the cookie (%s)\n", strerror(errno));
-			goto exit;
-		}
-	}
 
 	if (cli_cfg.password[0] != '\0')
 		log_warn("You should not pass the password on the command line. Type it interactively or use a configuration file instead.\n");
